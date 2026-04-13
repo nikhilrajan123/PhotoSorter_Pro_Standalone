@@ -29,15 +29,18 @@ jobs:
           # Clean up
           rm -rf ffmpeg-release-arm64-static.tar.xz ffmpeg-*-arm64-static/
 
-      - name: Setup Buildozer
-        uses: ArtemSBulgakov/buildozer-action@v1
-        id: buildozer
-        with:
-          command: buildozer android debug
-          buildozer_version: master
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git zip unzip openjdk-17-jdk python3-pip autoconf libtool pkg-config zlib1g-dev libncurses5-dev libncursesw5-dev libtinfo5 cmake libffi-dev libssl-dev
+          pip3 install --user --upgrade "buildozer" "cython<3.0.0" "virtualenv"
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Build APK with Buildozer
+        run: buildozer android debug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: PhotoSorter_Pro_Standalone.apk
-          path: ${{ steps.buildozer.outputs.filename }}
+          path: bin/*.apk
