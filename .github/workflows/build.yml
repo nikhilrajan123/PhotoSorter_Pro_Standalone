@@ -43,7 +43,10 @@ jobs:
           echo "$HOME/.local/bin" >> $GITHUB_PATH
 
       - name: Build APK with Buildozer
-        run: buildozer android debug
+        run: |
+          mkdir -p ~/.gradle
+          echo "org.gradle.java.home=$JAVA_HOME" > ~/.gradle/gradle.properties
+          buildozer android debug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
