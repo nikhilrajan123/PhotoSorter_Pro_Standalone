@@ -11,7 +11,7 @@ jobs:
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Download Static FFmpeg Binary
         run: |
@@ -37,7 +37,7 @@ jobs:
           buildozer_version: master
 
       - name: Upload APK
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: PhotoSorter_Pro_Standalone.apk
           path: ${{ steps.buildozer.outputs.filename }}
