@@ -41,7 +41,7 @@ android.accept_sdk_license = True
 
 # ── Gradle / build ────────────────────────────────────────────────────
 # Force Gradle to accept all licenses non-interactively
-android.gradle_dependencies = ''
+# android.gradle_dependencies = 
 
 # Include the raw ffmpeg binary masquerading as a shared library
 android.add_libs_arm64-v8a = bin/lib*-v8a.so, bin/libffmpeg.so
