@@ -36,6 +36,31 @@ from kivy.uix.tabbedpanel import TabbedPanel, TabbedPanelItem
 from kivy.uix.label import Label
 from kivy.uix.button import Button
 from kivy.uix.textinput import TextInput
+from kivy.graphics import RoundedRectangle, Color
+from kivy.uix.behaviors.button import ButtonBehavior
+
+class ModernButton(ButtonBehavior, Label):
+    def __init__(self, **kwargs):
+        self.bg_color = kwargs.pop('bg_color', ACCENT)
+        self.bg_color = self.bg_color if len(self.bg_color) == 4 else self.bg_color + [1]
+        kwargs.setdefault('color', BG)
+        super().__init__(**kwargs)
+        with self.canvas.before:
+            self._color = Color(*self.bg_color)
+            self._rect = RoundedRectangle(pos=self.pos, size=self.size, radius=[dp(8)])
+        self.bind(pos=self._update_rect, size=self._update_rect, state=self._update_state)
+
+    def _update_rect(self, *args):
+        self._rect.pos = self.pos
+        self._rect.size = self.size
+
+    def _update_state(self, *args):
+        if self.state == 'down':
+            self._color.rgba = [c * 0.8 for c in self.bg_color[:3]] + [self.bg_color[3]]
+        else:
+            self._color.rgba = self.bg_color
+
+Button = ModernButton # Override default button class
 from kivy.uix.progressbar import ProgressBar
 from kivy.uix.spinner import Spinner
 from kivy.uix.popup import Popup
@@ -128,13 +153,30 @@ def request_android_permissions(callback=None):
             try:
                 Environment = autoclass("android.os.Environment")
                 if not Environment.isExternalStorageManager():
-                    # We must ask user to toggle All Files Access
-                    Intent = autoclass("android.content.Intent")
-                    Settings = autoclass("android.provider.Settings")
-                    Uri     = autoclass("android.net.Uri")
-                    intent  = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
-                    intent.setData(Uri.parse(f"package:{mActivity.getPackageName()}"))
-                    mActivity.startActivity(intent)
+                    # Stop here and ask for permission via UI
+                    from kivy.uix.popup import Popup
+                    from kivy.uix.boxlayout import BoxLayout
+                    box = BoxLayout(orientation='vertical', padding=dp(20), spacing=dp(20))
+                    box.add_widget(Label(
+                        text='[b]Storage Access Required[/b]\n\nPhotoSorter directly manages (reads, renames, moves) media files.\n\nTo do this on modern Android, it requires "All Files Access".\n\nPlease click Below and turn ON the toggle for PhotoSorter Pro.\n\nRestart the app after granting access.',
+                        markup=True, halign='center', color=FG
+                    ))
+                    btn = ModernButton(text='Grant Permissions', size_hint=(0.8, None), height=dp(50), pos_hint={'center_x': 0.5})
+                    box.add_widget(btn)
+                    pop = Popup(title='Setup Required', content=box, size_hint=(0.9, 0.6), auto_dismiss=False)
+                    def open_intent(*args):
+                        pop.dismiss()
+                        Intent = autoclass('android.content.Intent')
+                        Settings = autoclass('android.provider.Settings')
+                        Uri = autoclass('android.net.Uri')
+                        intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
+                        intent.setData(Uri.parse(f'package:{mActivity.getPackageName()}'))
+                        mActivity.startActivity(intent)
+                    btn.bind(on_release=open_intent)
+                    from kivy.clock import Clock
+                    Clock.schedule_once(lambda dt: pop.open(), 0.5)
+                    if callback: callback(False)
+                    return
                 else:
                     if callback: callback(True)
                     return
@@ -1038,6 +1080,15 @@ class ImageTab(BoxLayout):
                 ct += 1
             try:
                 img = Image.open(src)
+            except Exception as e:
+                err = str(e)[:15]
+                if ".heic" in str(src).lower() and not HEIF_OK:
+                    err = "HEIC not supported"
+                self._upd_row(src, f"error: {err}", RED)
+                done += 1
+                self._upd(prog=int((i+1)/total*100))
+                continue
+            try:
                 # Preserve EXIF
                 exif_bytes = None
                 try:
