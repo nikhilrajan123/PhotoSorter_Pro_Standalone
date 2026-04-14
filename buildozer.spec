@@ -33,11 +33,7 @@ android.allow_backup = True
 android.accept_sdk_license = True
 
 # ── Gradle / build ────────────────────────────────────────────────────
-# Force Gradle to accept all licenses non-interactively
-# android.gradle_dependencies = 
-
-# Include the raw ffmpeg binary masquerading as a shared library
-android.add_libs_arm64_v8a = bin/lib*-v8a.so, bin/libffmpeg.so
+android.gradle_dependencies = com.arthenica:ffmpeg-kit-video:6.0-2
 
 [buildozer]
 log_level = 2
