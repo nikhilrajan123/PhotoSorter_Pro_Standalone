@@ -26,14 +26,19 @@ jobs:
           pip3 install --user --upgrade "buildozer" "cython<3.0.0" "virtualenv"
           echo "$HOME/.local/bin" >> $GITHUB_PATH
 
-      - name: Patch Kivy Templates for MavenCentral
-        run: |
-          find ~/.local/ -name "build.tmpl.gradle" -exec sed -i 's/jcenter()/mavenCentral()/g' {} +
-
-      - name: Build APK with Buildozer
+      - name: Patch and Build APK
         run: |
           mkdir -p ~/.gradle
           echo "org.gradle.java.home=$JAVA_HOME" > ~/.gradle/gradle.properties
+          
+          # Step 1: Initialize build environment (downloads python-for-android into .buildozer directory)
+          buildozer android update || true
+          
+          # Step 2: Aggressively patch the hidden internal Gradle templates to use mavenCentral
+          find .buildozer/ -name "*.gradle" -exec sed -i 's/jcenter()/mavenCentral()/g' {} +
+          find .buildozer/ -name "build.tmpl.gradle" -exec sed -i 's/google()/google()\n        mavenCentral()/g' {} +
+          
+          # Step 3: Execute final build
           buildozer android debug
 
       - name: Upload APK
