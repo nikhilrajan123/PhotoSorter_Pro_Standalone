@@ -120,35 +120,44 @@ def request_android_permissions(callback=None):
             Permission.WRITE_EXTERNAL_STORAGE,
         ]
 
-        # Android 13+ (API 33) — granular media permissions
+        # Android 11+ (API 30+) requires the "All Files Access" settings toggle.
         Build = autoclass("android.os.Build")
         sdk   = Build.VERSION.SDK_INT
-        if sdk >= 33:
+
+        if sdk >= 30:
             try:
-                perms.append(Permission.READ_MEDIA_IMAGES)
-                perms.append(Permission.READ_MEDIA_VIDEO)
-            except AttributeError:
-                perms.append("android.permission.READ_MEDIA_IMAGES")
-                perms.append("android.permission.READ_MEDIA_VIDEO")
+                Environment = autoclass("android.os.Environment")
+                if not Environment.isExternalStorageManager():
+                    # We must ask user to toggle All Files Access
+                    Intent = autoclass("android.content.Intent")
+                    Settings = autoclass("android.provider.Settings")
+                    Uri     = autoclass("android.net.Uri")
+                    intent  = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
+                    intent.setData(Uri.parse(f"package:{mActivity.getPackageName()}"))
+                    mActivity.startActivity(intent)
+                else:
+                    if callback: callback(True)
+                    return
+            except Exception:
+                pass
+
+        if sdk >= 33:
+            perms.append("android.permission.READ_MEDIA_IMAGES")
+            perms.append("android.permission.READ_MEDIA_VIDEO")
 
         def on_result(permissions, grants):
-            all_ok = all(grants)
-            # Android 11+ (API 30) — MANAGE_EXTERNAL_STORAGE via Settings
+            # On Android 11+, we consider it OK if the manager check is true, even if grants fail
+            ok = True
             if sdk >= 30:
                 try:
                     Environment = autoclass("android.os.Environment")
-                    if not Environment.isExternalStorageManager():
-                        Intent = autoclass("android.content.Intent")
-                        Settings = autoclass("android.provider.Settings")
-                        Uri     = autoclass("android.net.Uri")
-                        intent  = Intent(
-                            Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
-                        intent.setData(
-                            Uri.parse(f"package:{mActivity.getPackageName()}"))
-                        mActivity.startActivity(intent)
+                    ok = Environment.isExternalStorageManager()
                 except Exception:
-                    pass
-            if callback: callback(all_ok)
+                    ok = any(grants)
+            else:
+                ok = all(grants)
+            
+            if callback: callback(ok)
 
         request_permissions(perms, on_result)
 
