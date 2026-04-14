@@ -122,6 +122,19 @@ threading.Thread(target=_load_optional_deps, daemon=True).start()
 
 
 # ══════════════════════════════════════════════════════════════════════
+#  LOGGING
+# ══════════════════════════════════════════════════════════════════════
+app_logs = []
+def add_log(msg):
+    import datetime
+    out = "[{}] {}".format(datetime.datetime.now().strftime("%H:%M:%S"), msg)
+    print(out)
+    app_logs.append(out)
+    app = App.get_running_app()
+    if app and hasattr(app, '_log_lbl'):
+        app._log_lbl.text = "\\n".join(app_logs)
+
+# ══════════════════════════════════════════════════════════════════════
 #  ANDROID PERMISSIONS  (Android 6+ runtime, Android 11+ All Files)
 # ══════════════════════════════════════════════════════════════════════
 
@@ -176,13 +189,17 @@ def request_android_permissions(callback=None):
                         mActivity.startActivity(intent)
                     btn.bind(on_release=open_intent)
                     from kivy.clock import Clock
-                    Clock.schedule_once(lambda dt: pop.open(), 0.5)
-                    if callback: callback(False)
+                    try:
+                        Clock.schedule_once(lambda dt: pop.open(), 0.5)
+                    except Exception as e:
+                        add_log(f"Dialog Exception: {str(e)}")
+                        if callback: callback(False)
                     return
                 else:
                     if callback: callback(True)
                     return
-            except Exception:
+            except Exception as outer_e:
+                add_log(f"Perm Error: {str(outer_e)}")
                 pass
 
         if sdk >= 33:
@@ -327,7 +344,10 @@ def get_video_metadata(path: Path) -> dict:
                                capture_output=True, timeout=5)
             if r.returncode == 0:
                 probe = exe; break
-        except Exception:
+            else:
+                add_log(f"FFmpeg -version err: {r.stderr.decode('utf-8','replace')}")
+        except Exception as e:
+            add_log(f"Probe Err {exe}: {e}")
             pass
     if not probe: return {}
     try:
@@ -336,8 +356,11 @@ def get_video_metadata(path: Path) -> dict:
             [probe, "-v", "quiet", "-print_format", "json",
              "-show_format", "-show_streams", str(path)],
             capture_output=True, timeout=30)
-        return json.loads(r.stdout) if r.returncode == 0 else {}
-    except Exception:
+        if r.returncode != 0:
+            add_log(f"probe fail [{r.returncode}]: {r.stderr.decode('utf-8', 'replace')}")
+        return json.loads(r.stdout.decode('utf-8'))
+    except Exception as e:
+        add_log(f"probe exc: {e}")
         return {}
 
 
@@ -792,9 +815,10 @@ class VideoTab(BoxLayout):
             row = BoxLayout(size_hint_y=None, height=dp(42), spacing=dp(4))
             row.add_widget(mk_label(f.name, height=dp(42),
                                      size=(.55, None), font_size=dp(11)))
-            row.add_widget(mk_label(sz, color=MUTED, height=dp(42),
+            row.add_label = mk_label(sz, color=MUTED, height=dp(42),
                                      size=(.2, None), font_size=dp(11),
-                                     halign="right"))
+                                     halign="right")
+            row.add_widget(row.add_label)
             stat = mk_label("—", color=MUTED, height=dp(42),
                              size=(.25, None), font_size=dp(11),
                              halign="center")
@@ -877,8 +901,10 @@ class VideoTab(BoxLayout):
             ok = False
             try:
                 self._proc = subprocess.Popen(
-                    cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                self._proc.wait(timeout=7200)
+                    cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+                _, err = self._proc.communicate(timeout=7200)
+                if self._proc.returncode != 0:
+                    add_log(f"FFmpeg error: {err.decode('utf-8', 'replace')}")
                 ok = self._proc.returncode == 0 and out.exists()
                 if not ok and codec == "hevc" and not self._cancel:
                     cmd2 = [ff, "-i", str(vid), "-c:v", "libx264",
@@ -887,10 +913,11 @@ class VideoTab(BoxLayout):
                             "-map_metadata", "0",
                             "-movflags", "+faststart"] + ["-y", str(out)]
                     self._proc = subprocess.Popen(
-                        cmd2, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                    self._proc.wait(timeout=7200)
+                        cmd2, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+                    _, err2 = self._proc.communicate(timeout=7200)
                     ok = self._proc.returncode == 0 and out.exists()
-            except Exception:
+            except Exception as e:
+                add_log(f"Compress exc: {e}")
                 ok = False
             finally:
                 self._proc = None
@@ -1295,6 +1322,44 @@ class DuplicateTab(BoxLayout):
 
 
 # ══════════════════════════════════════════════════════════════════════
+#  TAB 5 — LOGS
+# ══════════════════════════════════════════════════════════════════════
+
+class LogsTab(BoxLayout):
+    def __init__(self, **kw):
+        super().__init__(orientation="vertical", spacing=dp(8), padding=dp(12), **kw)
+        self.add_widget(Label(text="[b]Application Logs[/b]", markup=True, halign="left", size_hint_y=None, height=dp(30), color=ACCENT))
+        scrl = ScrollView(size_hint=(1, 1))
+        
+        app = App.get_running_app()
+        self._log_lbl = Label(text="\n".join(app_logs), size_hint_y=None, halign="left", valign="top", color=MUTED, font_size=dp(10))
+        self._log_lbl.bind(width=lambda *x: self._log_lbl.setter("text_size")(self._log_lbl, (self._log_lbl.width, None)),
+                           texture_size=lambda *x: self._log_lbl.setter("height")(self._log_lbl, self._log_lbl.texture_size[1]))
+        scrl.add_widget(self._log_lbl)
+        self.add_widget(scrl)
+        
+        bx = BoxLayout(size_hint_y=None, height=dp(50), spacing=dp(10))
+        btn_clr = Button(text="Clear", bg_color=CARD, size_hint_x=0.3)
+        btn_clr.bind(on_release=self._clear)
+        btn_ref = Button(text="Refresh", bg_color=BLUE, size_hint_x=0.7)
+        btn_ref.bind(on_release=self._ref)
+        bx.add_widget(btn_clr)
+        bx.add_widget(btn_ref)
+        self.add_widget(bx)
+
+    def _clear(self, *x):
+        app_logs.clear()
+        self._log_lbl.text = ""
+        
+    def _ref(self, *x):
+        self._log_lbl.text = "\n".join(app_logs)
+
+    def on_parent(self, widget, parent):
+        app = App.get_running_app()
+        if app: app._log_lbl = self._log_lbl
+
+
+# ══════════════════════════════════════════════════════════════════════
 #  MAIN APP — startup, permissions, tab setup
 # ══════════════════════════════════════════════════════════════════════
 
@@ -1312,11 +1377,14 @@ class PhotoSorterApp(App):
         root = BoxLayout(orientation="vertical")
 
         # Title bar
-        bar = BoxLayout(size_hint_y=None, height=dp(44),
-                        padding=(dp(12), dp(6)))
+        bar = BoxLayout(size_hint_y=None, height=dp(54),
+                        padding=(dp(12), dp(6)), spacing=dp(10))
         bar.add_widget(Label(text="[b]PhotoSorter Pro[/b]",
                               markup=True, color=ACCENT,
                               font_size=dp(18), halign="left"))
+        btn_perm = Button(text="Settings", bg_color=(0.8,0.2,0.2,1), size_hint=(None, None), size=(dp(80), dp(36)))
+        btn_perm.bind(on_release=self._force_permission_intent)
+        bar.add_widget(btn_perm)
         root.add_widget(bar)
 
         # Permission status label (shown until permissions granted)
@@ -1328,13 +1396,14 @@ class PhotoSorterApp(App):
 
         # Tabs
         tp = TabbedPanel(do_default_tab=False)
-        tp.tab_width = Window.width / 3
+        tp.tab_width = Window.width / 5
 
         tabs = [
             ("Sort", SortTab),
             ("Video", VideoTab),
             ("Images", ImageTab),
             ("Duplicates", DuplicateTab),
+            ("Logs", LogsTab),
         ]
         for title, cls in tabs:
             item = TabbedPanelItem(text=title, font_size=dp(14))
@@ -1344,7 +1413,21 @@ class PhotoSorterApp(App):
         root.add_widget(tp)
         return root
 
-    def _request_perms(self, *a):
+    def _force_permission_intent(self, *args):
+        add_log("Manually opening App Settings Intent")
+        try:
+            from jnius import autoclass
+            from android import mActivity
+            Intent = autoclass('android.content.Intent')
+            Settings = autoclass('android.provider.Settings')
+            Uri = autoclass('android.net.Uri')
+            intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
+            intent.setData(Uri.parse(f'package:{mActivity.getPackageName()}'))
+            mActivity.startActivity(intent)
+        except Exception as e:
+            add_log(f"Force intent failed: {str(e)}")
+
+    def _request_perms(self, dt):
         def on_result(ok):
             txt = "✓ Storage access granted" if ok else \
                   "⚠ Storage permission denied — go to Settings → Apps → PhotoSorter → Permissions"
