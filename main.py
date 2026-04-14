@@ -303,62 +303,18 @@ def get_photo_date(path: Path, exif: dict) -> datetime:
 
 
 def find_ffmpeg() -> str:
-    if IS_ANDROID:
-        try:
-            from jnius import autoclass
-            mActivity = autoclass('org.kivy.android.PythonActivity').mActivity
-            lib_dir = str(mActivity.getApplicationInfo().nativeLibraryDir)
-            local_ff = os.path.join(lib_dir, "libffmpeg.so")
-            if os.path.exists(local_ff):
-                return local_ff
-        except Exception:
-            pass
-
-    candidates = [
-        "ffmpeg",
-        "/data/data/com.termux/files/usr/bin/ffmpeg",
-        "/data/user/0/com.termux/files/usr/bin/ffmpeg",
-    ]
-    for exe in candidates:
-        try:
-            import subprocess
-            r = subprocess.run([exe, "-version"],
-                               capture_output=True, timeout=5)
-            if r.returncode == 0:
-                return exe
-        except Exception:
-            pass
-    return ""
-
+    return "ffmpeg-kit"
 
 def get_video_metadata(path: Path) -> dict:
-    candidates = [
-        "ffprobe",
-        "/data/data/com.termux/files/usr/bin/ffprobe",
-    ]
-    probe = ""
-    for exe in candidates:
-        try:
-            import subprocess
-            r = subprocess.run([exe, "-version"],
-                               capture_output=True, timeout=5)
-            if r.returncode == 0:
-                probe = exe; break
-            else:
-                add_log(f"FFmpeg -version err: {r.stderr.decode('utf-8','replace')}")
-        except Exception as e:
-            add_log(f"Probe Err {exe}: {e}")
-            pass
-    if not probe: return {}
+    if not IS_ANDROID: return {}
     try:
-        import subprocess
-        r = subprocess.run(
-            [probe, "-v", "quiet", "-print_format", "json",
-             "-show_format", "-show_streams", str(path)],
-            capture_output=True, timeout=30)
-        if r.returncode != 0:
-            add_log(f"probe fail [{r.returncode}]: {r.stderr.decode('utf-8', 'replace')}")
-        return json.loads(r.stdout.decode('utf-8'))
+        from jnius import autoclass
+        import json
+        FFprobeKit = autoclass('com.arthenica.ffmpegkit.FFprobeKit')
+        session = FFprobeKit.execute(f"-v quiet -print_format json -show_format -show_streams \"{str(path)}\"")
+        out = session.getOutput()
+        if not out: return {}
+        return json.loads(out)
     except Exception as e:
         add_log(f"probe exc: {e}")
         return {}
@@ -847,10 +803,8 @@ class VideoTab(BoxLayout):
         if prog is not None: self._prog.value = prog
 
     def _start(self, *a):
-        if not find_ffmpeg():
-            self._status.text = ("⚠ ffmpeg not found.\n"
-                                  "Install Termux from F-Droid → run: pkg install ffmpeg")
-            return
+        if not IS_ANDROID:
+            self._status.text = "⚠ FFmpeg only available on Android"; return
         if not self._entries:
             self._status.text = "⚠ Load videos first"; return
         self._cancel = False
@@ -860,9 +814,11 @@ class VideoTab(BoxLayout):
 
     def _stop(self, *a):
         self._cancel = True
-        if self._proc:
-            try: self._proc.terminate()
-            except Exception: pass
+        try:
+            from jnius import autoclass
+            FFmpegKit = autoclass('com.arthenica.ffmpegkit.FFmpegKit')
+            FFmpegKit.cancel()
+        except Exception: pass
         self._stop_btn.disabled = True
 
     def _run(self):
@@ -888,7 +844,7 @@ class VideoTab(BoxLayout):
 
             vc    = "libx265" if codec == "hevc" else "libx264"
             extra = ["-tag:v", "hvc1"] if codec == "hevc" else []
-            cmd   = [ff, "-i", str(vid),
+            cmd   = ["-i", str(vid),
                      "-c:v", vc, "-crf", crf, "-preset", "medium",
                      "-c:a", "aac", "-b:a", "128k",
                      "-map_metadata", "0",
@@ -900,27 +856,34 @@ class VideoTab(BoxLayout):
 
             ok = False
             try:
-                self._proc = subprocess.Popen(
-                    cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
-                _, err = self._proc.communicate(timeout=7200)
-                if self._proc.returncode != 0:
-                    add_log(f"FFmpeg error: {err.decode('utf-8', 'replace')}")
-                ok = self._proc.returncode == 0 and out.exists()
+                from jnius import autoclass
+                FFmpegKit = autoclass('com.arthenica.ffmpegkit.FFmpegKit')
+                ReturnCode = autoclass('com.arthenica.ffmpegkit.ReturnCode')
+                
+                # Format cmd array as a space separated string for FFmpegKit parse
+                cmd_str = " ".join([f'"{c}"' if " " in str(c) else str(c) for c in cmd])
+                session = FFmpegKit.execute(cmd_str)
+                ret = session.getReturnCode()
+                
+                if not ReturnCode.isSuccess(ret):
+                    err = session.getFailStackTrace() or session.getOutput() or "unknown error"
+                    add_log(f"FFmpeg error: {str(err)}")
+                
+                ok = ReturnCode.isSuccess(ret) and out.exists()
+                
                 if not ok and codec == "hevc" and not self._cancel:
-                    cmd2 = [ff, "-i", str(vid), "-c:v", "libx264",
+                    cmd2 = ["-i", str(vid), "-c:v", "libx264",
                             "-crf", "28", "-preset", "medium",
                             "-c:a", "aac", "-b:a", "128k",
                             "-map_metadata", "0",
-                            "-movflags", "+faststart"] + ["-y", str(out)]
-                    self._proc = subprocess.Popen(
-                        cmd2, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
-                    _, err2 = self._proc.communicate(timeout=7200)
-                    ok = self._proc.returncode == 0 and out.exists()
+                            "-movflags", "+faststart", "-y", str(out)]
+                    cmd_str2 = " ".join([f'"{c}"' if " " in str(c) else str(c) for c in cmd2])
+                    session2 = FFmpegKit.execute(cmd_str2)
+                    ret2 = session2.getReturnCode()
+                    ok = ReturnCode.isSuccess(ret2) and out.exists()
             except Exception as e:
                 add_log(f"Compress exc: {e}")
                 ok = False
-            finally:
-                self._proc = None
 
             if ok:
                 new_mb = out.stat().st_size / (1024*1024)
