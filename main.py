@@ -128,7 +128,8 @@ def request_android_permissions(callback=None):
                 perms.append(Permission.READ_MEDIA_IMAGES)
                 perms.append(Permission.READ_MEDIA_VIDEO)
             except AttributeError:
-                pass  # older python-for-android doesn't define these yet
+                perms.append("android.permission.READ_MEDIA_IMAGES")
+                perms.append("android.permission.READ_MEDIA_VIDEO")
 
         def on_result(permissions, grants):
             all_ok = all(grants)
