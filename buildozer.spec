@@ -34,7 +34,7 @@ android.accept_sdk_license = True
 
 # ── Gradle / build ────────────────────────────────────────────────────
 android.gradle_repositories = "mavenCentral()"
-android.gradle_dependencies = com.arthenica:ffmpeg-kit-video:6.0-2
+android.gradle_dependencies = com.arthenica:ffmpeg-kit-video:6.0.LTS
 
 [buildozer]
 log_level = 2
