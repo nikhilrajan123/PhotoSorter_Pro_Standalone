@@ -39,3 +39,5 @@ android.gradle_dependencies = com.arthenica:ffmpeg-kit-video:6.0-2
 [buildozer]
 log_level = 2
 warn_on_root = 1
+
+p4a.source_dir = ./p4a-custom
