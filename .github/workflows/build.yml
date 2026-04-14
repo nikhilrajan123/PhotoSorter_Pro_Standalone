@@ -19,21 +19,7 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Download Static FFmpeg Binary
-        run: |
-          # Create the bin directory
-          mkdir -p bin
-          
-          # Download a reliable static arm64-v8a ffmpeg build 
-          wget https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-arm64-static.tar.xz
-          
-          # Extract only the ffmpeg executable and rename it to libffmpeg.so
-          # (Android only allows executing binaries if they are packaged as .so libraries!)
-          tar -xf ffmpeg-release-arm64-static.tar.xz
-          mv ffmpeg-*-arm64-static/ffmpeg bin/libffmpeg.so
-          
-          # Clean up
-          rm -rf ffmpeg-release-arm64-static.tar.xz ffmpeg-*-arm64-static/
+
 
       - name: Install Dependencies
         run: |
