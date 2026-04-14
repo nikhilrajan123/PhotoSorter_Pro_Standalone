@@ -41,8 +41,10 @@ from kivy.uix.behaviors.button import ButtonBehavior
 
 class ModernButton(ButtonBehavior, Label):
     def __init__(self, **kwargs):
-        self.bg_color = kwargs.pop('bg_color', ACCENT)
-        self.bg_color = self.bg_color if len(self.bg_color) == 4 else self.bg_color + [1]
+        bg = kwargs.pop('bg_color', None)
+        if bg is None: bg = kwargs.pop('background_color', ACCENT)
+        else: kwargs.pop('background_color', None)
+        self.bg_color = bg if len(bg) == 4 else list(bg) + [1]
         kwargs.setdefault('color', BG)
         super().__init__(**kwargs)
         with self.canvas.before:
