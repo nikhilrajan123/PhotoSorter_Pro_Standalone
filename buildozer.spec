@@ -26,14 +26,7 @@ android.archs = arm64-v8a
 # ── Permissions ───────────────────────────────────────────────────────
 # Android 13+ (API 33+) replaced READ_EXTERNAL_STORAGE with granular media perms
 # MANAGE_EXTERNAL_STORAGE = access ALL files (needed to read/write DCIM)
-android.permissions = \
-    INTERNET,\
-    READ_MEDIA_IMAGES,\
-    READ_MEDIA_VIDEO,\
-    READ_MEDIA_AUDIO,\
-    READ_EXTERNAL_STORAGE,\
-    WRITE_EXTERNAL_STORAGE,\
-    MANAGE_EXTERNAL_STORAGE
+android.permissions = INTERNET,READ_MEDIA_IMAGES,READ_MEDIA_VIDEO,READ_MEDIA_AUDIO,READ_EXTERNAL_STORAGE,WRITE_EXTERNAL_STORAGE,MANAGE_EXTERNAL_STORAGE
 
 # ── Android features ──────────────────────────────────────────────────
 android.allow_backup = True
