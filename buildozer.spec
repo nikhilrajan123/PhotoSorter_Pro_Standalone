@@ -33,8 +33,9 @@ android.allow_backup = True
 android.accept_sdk_license = True
 
 # ── Gradle / build ────────────────────────────────────────────────────
-android.gradle_repositories = "mavenCentral()"
+android.add_gradle_repositories = "mavenCentral()"
 android.gradle_dependencies = com.arthenica:ffmpeg-kit-video:6.0.LTS
+android.add_packaging_options = "pickFirst 'lib/*/libc++_shared.so'"
 
 [buildozer]
 log_level = 2
