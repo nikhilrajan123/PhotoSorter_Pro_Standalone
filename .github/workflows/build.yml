@@ -19,14 +19,16 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-
-
       - name: Install Dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y git zip unzip python3-pip autoconf libtool pkg-config zlib1g-dev libncurses5-dev libncursesw5-dev libtinfo5 cmake libffi-dev libssl-dev
           pip3 install --user --upgrade "buildozer" "cython<3.0.0" "virtualenv"
           echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Patch Kivy Templates for MavenCentral
+        run: |
+          find ~/.local/ -name "build.tmpl.gradle" -exec sed -i 's/jcenter()/mavenCentral()/g' {} +
 
       - name: Build APK with Buildozer
         run: |
