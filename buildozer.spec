@@ -37,7 +37,7 @@ android.accept_sdk_license = True
 # android.gradle_dependencies = 
 
 # Include the raw ffmpeg binary masquerading as a shared library
-android.add_libs_arm64-v8a = bin/lib*-v8a.so, bin/libffmpeg.so
+android.add_libs_arm64_v8a = bin/lib*-v8a.so, bin/libffmpeg.so
 
 [buildozer]
 log_level = 2
